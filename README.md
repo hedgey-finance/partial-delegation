@@ -1,11 +1,10 @@
 # Partial delegation contract
 
-- Delegator can delegate a number of tokens to a delegate.
-- The delegate balance is increased by the number of tokens delegated.
-- The delegator balance is decreased by the number of tokens delegated.
-- The delegator can have tokens delegated to multiple delegates.
-- The delegator can be a delegate
-
+- Delegator can delegate a percentage of their ERC-20 token.
+- Delegator can undelegate a percentage of their ERC-20 token.
+- The delegator can have percentages delegated to multiple delegates.
+- Delegator cannot delegate over 100% of their ERC-20 token.
+- The delegator cannot be a delegate
 
 ## Snapshot strategy
 ```

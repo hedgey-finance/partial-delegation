@@ -17,33 +17,63 @@ describe("PartialDelegation", function () {
     it("should delegate tokens", async () => {
       const { euro, partialDelegation } = await loadFixture(fixture);
       const [delegator, delegate] = await ethers.getSigners();
-      await partialDelegation.delegate(delegate.address, euro.address, "1000");
+      const delegatorBalance = await euro.balanceOf(delegator.address);
+      await partialDelegation.delegate(delegate.address, euro.address, 10);
       const delegateBalance = await partialDelegation.getBalance(delegate.address, euro.address);
-      expect(delegateBalance).to.equal("1000");
-      await partialDelegation.removeDelegation(delegate.address, euro.address);
-      const delegateBalanceAfterRemoval = await partialDelegation.getBalance(delegate.address, euro.address);
-      expect(delegateBalanceAfterRemoval).to.equal("0");
+      expect(delegateBalance).to.equal(delegatorBalance.mul(10).div(100));
     });
 
-    it("should reduce balance when tokens are delegated", async function () {
+    it("should delegate tokens to multiple delegates", async () => {
       const { euro, partialDelegation } = await loadFixture(fixture);
-      const [delegator, delegate] = await ethers.getSigners();
-      await partialDelegation.delegate(delegate.address, euro.address, "1000");
-      const delegateBalance = await partialDelegation.getBalance(delegate.address, euro.address);
-      expect(delegateBalance).to.equal("1000");
-      const delegatorBalance = await partialDelegation.getBalance(delegator.address, euro.address);
-      expect(delegatorBalance).to.equal("999000");
+      const [delegator, delegate1, delegate2] = await ethers.getSigners();
+      const delegatorBalance = await euro.balanceOf(delegator.address);
+      await partialDelegation.delegate(delegate1.address, euro.address, 50);
+      await partialDelegation.delegate(delegate2.address, euro.address, 50);
+      const delegate1Balance = await partialDelegation.getBalance(delegate1.address, euro.address);
+      const delegate2Balance = await partialDelegation.getBalance(delegate2.address, euro.address);
+      expect(delegate1Balance).to.equal(delegatorBalance.mul(50).div(100));
+      expect(delegate2Balance).to.equal(delegatorBalance.mul(50).div(100));
     });
 
-    it("should remove the delegations and restore the balances", async function () {
+    it("should fail if delegate address is zero", async () => {
+      const { partialDelegation } = await loadFixture(fixture);
+      const [delegator] = await ethers.getSigners();
+      await expect(partialDelegation.delegate(ethers.constants.AddressZero, ethers.constants.AddressZero, 10)).to.be.revertedWith("Delegate must be a valid address");
+    });
+
+    it("should fail if token address is zero", async () => {
+      const { partialDelegation } = await loadFixture(fixture);
+      const [delegator] = await ethers.getSigners();
+      await expect(partialDelegation.delegate(delegator.address, ethers.constants.AddressZero, 10)).to.be.revertedWith("Token must be a valid address");
+    });
+
+    it("should fail if delegate percentage is zero", async () => {
+      const { partialDelegation } = await loadFixture(fixture);
+      const [delegator] = await ethers.getSigners();
+      await expect(partialDelegation.delegate(delegator.address, delegator.address, 0)).to.be.revertedWith("Percentage must be greater than 0");
+    });
+
+    it("should fail if delegate percentage is greater than 100", async () => {
+      const { partialDelegation } = await loadFixture(fixture);
+      const [delegator] = await ethers.getSigners();
+      await expect(partialDelegation.delegate(delegator.address, delegator.address, 101)).to.be.revertedWith("Percentage must be less than or equal to 100");
+    });
+
+    it("should fail if percentage delegated is greater than 100", async () => {
+      const { euro, partialDelegation } = await loadFixture(fixture);
+      const [delegator, delegate1, delegate2] = await ethers.getSigners();
+      const delegatorBalance = await euro.balanceOf(delegator.address);
+      await partialDelegation.delegate(delegate1.address, euro.address, 50);
+      await expect(partialDelegation.delegate(delegate2.address, euro.address, 60)).to.be.revertedWith("Total delegated is greater than 100%");
+    });
+
+    it("should remove delegation", async () => {
       const { euro, partialDelegation } = await loadFixture(fixture);
       const [delegator, delegate] = await ethers.getSigners();
-      await partialDelegation.delegate(delegate.address, euro.address, "1000");
+      await partialDelegation.delegate(delegate.address, euro.address, 10);
       await partialDelegation.removeDelegation(delegate.address, euro.address);
-      const delegateBalanceAfterRemoval = await partialDelegation.getBalance(delegate.address, euro.address);
-      expect(delegateBalanceAfterRemoval).to.equal("0");
-      const delegatorBalanceAfterRemoval = await partialDelegation.getBalance(delegator.address, euro.address);
-      expect(delegatorBalanceAfterRemoval).to.equal("1000000");
+      const delegateBalance = await partialDelegation.getBalance(delegate.address, euro.address);
+      expect(delegateBalance).to.equal(0);
     });
   });
 });

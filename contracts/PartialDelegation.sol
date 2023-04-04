@@ -2,32 +2,41 @@
 pragma solidity ^0.8.9;
 
 import "./IERC20.sol";
-import "hardhat/console.sol";
 
 contract PartialDelegation {
   struct Delegation {
     address delegate;
     address token;
-    uint256 amount;
+    uint percentage;
   }
 
   mapping(address => Delegation[]) delegations;
   address[] delegators;
 
-  function delegate(address _delegate, address _token, uint256 _amount) public {
-    IERC20 token = IERC20(_token);
-    uint256 tokenBalance = token.balanceOf(msg.sender);
-    require(tokenBalance >= _amount, "Not enough balance");
-    Delegation[] memory _delegations = delegations[msg.sender];
-    uint256 _delegationBalance = 0;
+  function delegate(address _delegate, address _token, uint _percentage) public {
+    require(_delegate != address(0), "Delegate must be a valid address");
+    require(_percentage > 0, "Percentage must be greater than 0");
+    require(_percentage <= 100, "Percentage must be less than or equal to 100");
+    require(_token != address(0), "Token must be a valid address");
+    Delegation[] storage _delegations = delegations[msg.sender];
+
+    uint totalDelegation = 0;
     for (uint256 i = 0; i < _delegations.length; i++) {
-      Delegation memory _delegation = _delegations[i];
-      if(_delegation.delegate == _delegate && _delegation.token == _token) {
-        _delegationBalance += _delegation.amount;
+      if(_delegations[i].token == _token) {
+        totalDelegation += _delegations[i].percentage;
       }
     }
-    require(tokenBalance >= _delegationBalance + _amount, "Delegated too much");
-    Delegation memory delegation = Delegation(_delegate, _token, _amount);
+    require(totalDelegation + _percentage <= 100, "Total delegated is greater than 100%");
+    for (uint256 i = 0; i < _delegations.length; i++) {
+      Delegation storage _delegation = _delegations[i];
+      if(_delegation.delegate == _delegate && _delegation.token == _token) {
+        uint newPercentage = _delegation.percentage + _percentage;
+        require(newPercentage <= 100, "Delegated too much");
+        _delegation.percentage = newPercentage;
+        return;
+      }
+    }
+    Delegation memory delegation = Delegation(_delegate, _token, _percentage);
     delegations[msg.sender].push(delegation);
     delegators.push(msg.sender);
   }
@@ -42,37 +51,19 @@ contract PartialDelegation {
     }
   }
 
-  function isDelegator (address _address) private view returns (bool) {
-    for (uint256 i = 0; i < delegators.length; i++) {
-      if (delegators[i] == _address) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  function getBalance (address _address, address _token) public view returns (uint256) {
-    IERC20 token = IERC20(_token);
-    uint256 tokenBalance = token.balanceOf(_address);
+  function getBalance(address _address, address _token) public view returns (uint256) {
     for (uint256 i = 0; i < delegators.length; i++) {
       address delegator = delegators[i];
       Delegation[] memory _delegations = delegations[delegator];
       for (uint256 j = 0; j < _delegations.length; j++) {
         Delegation memory _delegation = _delegations[j];
         if(_delegation.delegate == _address && _delegation.token == _token) {
-          tokenBalance += _delegation.amount;
+          IERC20 token = IERC20(_token);
+          uint256 balance = token.balanceOf(delegator);
+          return balance * _delegation.percentage / 100;
         }
       }
     }
-    if(isDelegator(_address)) {
-      Delegation[] memory _delegations = delegations[_address];
-      for (uint256 j = 0; j < _delegations.length; j++) {
-        Delegation memory _delegation = _delegations[j];
-        if(_delegation.token == _token) {
-          tokenBalance -= _delegation.amount;
-        }
-      }
-    }
-    return tokenBalance;
+    return 0;
   }
 }
